@@ -1,0 +1,64 @@
+======================================================================
+DATA QUALITY REPORT
+======================================================================
+Panel rows (institution-year observations): 16813
+Distinct institutions (UNITID):              1901
+Distinct fiscal years:                        10
+Fiscal year range:                            2014-2023
+
+--- Match rates between sources ---
+IPEDS private-nonprofit-4yr rows:                     16813
+  ... matched to a composite score (same opeid+year): 14607 (86.9% of panel rows)
+Distinct OPEIDs in composite-score files:             4284
+Distinct OPEIDs in IPEDS private-nonprofit-4yr universe: 1874
+  ... overlap:                                        1658
+
+Rows with a non-null EIN:                             16813
+  ... matched to a Form 990 filing for that fiscal year: 14050 (83.6% of rows with an EIN)
+
+--- Label balance (distressed_next_year) ---
+Rows with a usable label (score observed in year t+1): 13027 (77.5% of panel)
+Share distressed (score < 1.5 next year) among labeled rows: 6.7%
+
+--- Missing values per column ---
+                            missing_count  missing_pct
+next_year_score                      3786         22.5
+distressed_next_year                 3786         22.5
+f990_net_assets_end                  2777         16.5
+f990_total_revenue                   2763         16.4
+f990_total_liabilities_end           2763         16.4
+f990_total_expenses                  2763         16.4
+f990_total_assets_end                2763         16.4
+composite_score                      2206         13.1
+institution_name_fsa                 2206         13.1
+total_liabilities                    1420          8.4
+total_assets                         1420          8.4
+total_net_assets                     1420          8.4
+total_expenses                       1420          8.4
+net_assets_end_of_year               1420          8.4
+total_revenues                       1420          8.4
+total_enrollment                      333          2.0
+
+--- Summary statistics (numeric columns) ---
+                              count          mean           std          min          25%          50%           75%           max
+unitid                      16813.0  2.264767e+05  1.090667e+05     100690.0    155414.00     195164.0  2.314200e+05  4.996350e+05
+SECTOR                      16813.0  2.000000e+00  0.000000e+00          2.0         2.00          2.0  2.000000e+00  2.000000e+00
+CONTROL                     16813.0  2.000000e+00  0.000000e+00          2.0         2.00          2.0  2.000000e+00  2.000000e+00
+ICLEVEL                     16813.0  1.000000e+00  0.000000e+00          1.0         1.00          1.0  1.000000e+00  1.000000e+00
+hbcu                        16813.0  1.970618e+00  1.688799e-01          1.0         2.00          2.0  2.000000e+00  2.000000e+00
+total_enrollment            16480.0  2.557168e+03  6.354897e+03          1.0       308.00       1114.0  2.522000e+03  1.850150e+05
+total_assets                15393.0  5.869377e+08  3.177914e+09          0.0  20881278.00   87204933.0  2.527073e+08  7.690435e+10
+total_liabilities           15393.0  1.559985e+08  8.101311e+08          0.0   3426936.00   23058639.0  6.938521e+07  3.350694e+10
+total_net_assets            15393.0  4.309392e+08  2.459390e+09  -52190157.0  13204457.00   58293461.0  1.789746e+08  6.337507e+10
+total_revenues              15393.0  1.617327e+08  7.557771e+08 -310343929.0   8767299.00   31582593.0  8.046500e+07  1.843912e+10
+total_expenses              15393.0  1.379327e+08  6.055618e+08      50000.0   8343601.00   30089737.0  7.397223e+07  1.385715e+10
+net_assets_end_of_year      15393.0  4.309392e+08  2.459390e+09  -52190157.0  13204457.00   58293461.0  1.789746e+08  6.337507e+10
+fiscal_year                 16813.0  2.018462e+03  2.867560e+00       2014.0      2016.00       2018.0  2.021000e+03  2.023000e+03
+composite_score             14607.0  2.482033e+00  6.360414e-01         -1.0         2.20          2.6  3.000000e+00  3.000000e+00
+next_year_score             13027.0  2.470312e+00  6.333604e-01         -1.0         2.20          2.6  3.000000e+00  3.000000e+00
+distressed_next_year        13027.0  6.701466e-02  2.500570e-01          0.0         0.00          0.0  0.000000e+00  1.000000e+00
+f990_total_revenue          14050.0  2.023668e+08  6.767868e+08          0.0  20971866.25   57816373.5  1.363050e+08  1.107860e+10
+f990_total_expenses         14050.0  1.841707e+08  5.960366e+08     -62691.0  20153098.00   55701516.5  1.286385e+08  1.009484e+10
+f990_total_assets_end       14050.0  6.262331e+08  3.094048e+09          0.0  36236574.75  110751307.5  3.076329e+08  7.528752e+10
+f990_total_liabilities_end  14050.0  1.777909e+08  8.465893e+08          0.0   9294052.75   33165340.0  8.982300e+07  3.340259e+10
+f990_net_assets_end         14036.0  4.488894e+08  2.377521e+09 -299530327.0  20385528.50   75472981.0  2.150232e+08  6.143526e+10

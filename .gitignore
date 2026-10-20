@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+venv/
+.venv/
+
+# Downloaded source data and caches are large and re-derivable from the scripts;
+# keep the repo to code + small processed outputs.
+data/raw/
+data/processed/*.parquet
