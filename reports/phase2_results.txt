@@ -1,0 +1,68 @@
+======================================================================
+PHASE 2 RESULTS SUMMARY
+======================================================================
+
+--- Step 1: data issue fixes ---
+1a. Form 990 fiscal-year alignment: CONFIRMED CORRECT, no fix needed.
+    tax_prd_yr labels a filing by the calendar year its tax_prd (YYYYMM) ENDS in
+    (e.g. tax_prd=201406 -> tax_prd_yr=2014), matching how panel fiscal_year is
+    defined. Panel-wide check: the current match (shift=0) agrees with IPEDS
+    total_assets within 5% for 79.3% of rows, vs. 45.5% (shift=-1) and 46.0% (shift=+1).
+1b. Oakwood's actual missing composite-score years: [2019, 2023] (NOT 2018/2022 as Phase 1's NOTES.md said -- that was a transcription error,
+    corrected below). Confirmed Oakwood's OPEID is genuinely absent from the raw
+    FY2019 and FY2023 FSA .xls files -- a source data gap, not a pipeline bug.
+1c. 230/1901 (12.1%) of IPEDS private-nonprofit-4yr
+    institutions never match a composite score in any year. They are smaller than
+    matched institutions (median enrollment 293 vs. 1096), concentrated in CA/FL/NY/PR, and 36 of them
+    share an OPEID with a sibling branch campus that DOES get a score (the FSA score
+    applies at the OPEID/corporate-entity level, not per IPEDS UNITID branch campus).
+
+--- Step 2: new IPEDS F2 fields ---
+Added F2D01 (tuition_fees_revenue) and F2D08 (contribution_revenue), verified against
+the FY2013-14 and FY2021-22 F2 data dictionaries and present in every year 2014-2023.
+
+--- Step 3: features & missingness ---
+  operating_margin         missing   293 rows (1.7%)
+  leverage                 missing   295 rows (1.8%)
+  tuition_dependence       missing   874 rows (5.2%)
+  contribution_share       missing   874 rows (5.2%)
+  enrollment_change_1yr    missing  2219 rows (13.2%)
+  enrollment_change_3yr    missing  5787 rows (34.4%)
+  log_total_revenue        missing   330 rows (2.0%)
+Missing rule: IPEDS primary, Form 990 fallback for revenue/expenses/assets/liabilities
+(no fallback available for tuition_dependence/contribution_share). Remaining missing
+values are winsorized (train 1st/99th pct) then median-imputed using TRAINING DATA ONLY.
+
+--- Step 5: time-based split ---
+Train: fiscal years 2014-2019 (8981 rows, 7.3% distressed)
+Test:  fiscal years 2020-2022 (4046 rows, 5.3% distressed)
+
+--- Step 6: baseline logistic regression (test set) ---
+ROC-AUC:   0.848
+PR-AUC:    0.298
+Precision (distressed class): 0.173
+Recall (distressed class):    0.706
+Confusion matrix [[TN, FP], [FN, TP]]: [[3111, 721], [63, 151]]
+
+Naive baseline (always predict not distressed): accuracy 0.947, precision/recall on distressed class 0.000/0.000
+
+Coefficients (standardized features, sorted by |coefficient|):
+  log_total_revenue        -1.130
+  leverage                 +0.991
+  tuition_dependence       -0.480
+  operating_margin         -0.369
+  contribution_share       -0.085
+  enrollment_change_1yr    -0.078
+  enrollment_change_3yr    -0.061
+
+--- Step 7: Oakwood University predicted probability of distress ---
+  FY2014 (train    ): predicted_prob=0.211, composite_score=3.0, actual_label=0.0
+  FY2015 (train    ): predicted_prob=0.183, composite_score=3.0, actual_label=0.0
+  FY2016 (train    ): predicted_prob=0.185, composite_score=2.8, actual_label=0.0
+  FY2017 (train    ): predicted_prob=0.176, composite_score=3.0, actual_label=0.0
+  FY2018 (train    ): predicted_prob=0.175, composite_score=2.7, actual_label=nan
+  FY2019 (train    ): predicted_prob=0.174, composite_score=nan, actual_label=0.0
+  FY2020 (test     ): predicted_prob=0.208, composite_score=2.5, actual_label=0.0
+  FY2021 (test     ): predicted_prob=0.168, composite_score=3.0, actual_label=0.0
+  FY2022 (test     ): predicted_prob=0.466, composite_score=2.2, actual_label=nan
+  FY2023 (unlabeled): predicted_prob=0.490, composite_score=nan, actual_label=nan

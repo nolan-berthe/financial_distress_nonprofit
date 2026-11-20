@@ -2,6 +2,284 @@
 
 Running log for the progress report. Newest entries at the top.
 
+## Phase 4
+
+See `notebooks/04_explanations_and_fairness.ipynb` and
+`reports/phase4_results.txt` for the full run; this is the log of problems
+hit and fixes.
+
+### Setup: `shap` installed cleanly on Python 3.14
+
+Same situation as Phase 3's `xgboost` install — `pip install shap` resolved
+`shap==0.54.1` (a `cp312-abi3` wheel, so it works unmodified on 3.14 via the
+stable ABI) with no pin or workaround needed. Added `shap>=0.44` to
+`requirements.txt`.
+
+### Problem: `shap.TreeExplainer` returns a 3D array for `RandomForestClassifier`, not 2D
+
+`shap.TreeExplainer(rf)(X)` on the random forest returns an `Explanation`
+shaped `(n_rows, n_features, n_classes)` — one full attribution per class —
+whereas the same call on the XGBoost model returns `(n_rows, n_features)`
+directly, because XGBoost's binary classifier has a single raw (margin)
+output while scikit-learn's `RandomForestClassifier` reports both class
+probabilities. Indexed down to the distressed class only (`rf_shap[:, :,
+1]`) before doing anything else with it (beeswarm plot, mean-|SHAP| ranking) —
+not a bug, just an API difference worth documenting since passing the raw
+3D object into a plot produces a confusing error otherwise.
+
+### Problem: `shap.LinearExplainer`/`TreeExplainer` output scales differ by model, not just by magnitude
+
+Logistic regression's `LinearExplainer` and XGBoost's `TreeExplainer` both
+explain the **log-odds** (pre-sigmoid) output by default, but a random
+forest's trees output class probabilities directly (no link function), so
+its `TreeExplainer` values are already in **probability** units. Comparing
+raw SHAP magnitudes across all three models would silently compare
+apples to oranges. **Not treated as a bug to fix** (converting one model's
+scale to match another's isn't well-defined in general) — instead, Part 1's
+cross-model comparison only uses *direction* (sign of corr(feature,
+SHAP)) and *rank* (order by mean |SHAP| within each model's own scale),
+both of which are invariant to a monotonic rescaling, and the notebook/report
+call out the scale difference explicitly rather than plotting all three on
+one shared axis.
+
+### Problem: SHAP's own waterfall/beeswarm plots show the *standardized* feature values for logistic regression
+
+`shap.LinearExplainer` necessarily operates on the same standardized inputs
+`fit_logistic`'s pipeline trains on, so by default its `Explanation.data`
+holds z-scored values (e.g. "-0.53" instead of Oakwood's actual
+`tuition_dependence` of 0.324) — unreadable in a waterfall plot meant for a
+human case-study reader.
+
+**Fix:** after computing the `Explanation` object, overwrite its `.data`
+attribute with the raw (clipped+imputed, un-standardized) feature values
+pulled from the same rows, before plotting — shape-compatible and purely
+cosmetic (the SHAP `.values`/`.base_values` driving the plot's bars are
+untouched, only the axis labels change). Confirmed this doesn't silently
+break anything by checking `shap.plots.waterfall` renders and saves
+normally with the substituted `.data`.
+
+### Design decisions (not bugs, but worth recording)
+
+- **Oakwood's FY2022 row has no train/test split membership** (its
+  `distressed_next_year` label is NaN — see Phase 1/2 notes on Oakwood's
+  missing FY2023 composite score, which is what FY2022's forward label would
+  need) — so it is absent from `labeled`/`test_df` entirely. The Oakwood case
+  study pulls features for FY2020-2023 straight from the full `feat` frame
+  (applying the official train-fit clip/impute bounds), not from `test_df`,
+  specifically so FY2022 and FY2023 are still included despite having no
+  label.
+- **Fairness bootstrap**: resampling is done **within each group separately**
+  (HBCU rows resampled from HBCU rows only, same for "other"), not from the
+  pooled test set, since the question is the uncertainty of each group's own
+  rate, not of the test set as a whole. A resample that happens to draw zero
+  actual positives (possible for the 128-row HBCU group, which has only 9
+  truly distressed rows to begin with) makes that resample's recall
+  undefined; those draws are excluded from that metric's CI rather than
+  counted as 0 (`fairness.py:_percentile_ci`), and the count of valid draws
+  per metric is computed so a CI built from suspiciously few valid draws
+  would be visible (in this run, all 2,000 draws were valid for every metric
+  in both groups).
+- **COVID-period diagnostic refit** (Part 4) intentionally re-fits its own
+  clip bounds and median imputer on the 2020-2022 rows rather than reusing
+  the official train-fit (2014-2019) ones — the question being asked is
+  "what does the feature-distress relationship look like *using only
+  pandemic-era data*," which requires pandemic-era preprocessing too; reusing
+  the 2014-2019 bounds would have been a reasonable alternative design but
+  answers a subtly different question ("how do pandemic-era rows score under
+  pre-pandemic assumptions about typical/extreme values"). This refit is
+  explicitly diagnostic only — it is never evaluated on held-out data or
+  treated as a candidate model.
+- **Headline findings** (full numbers in `reports/phase4_results.txt`):
+  SHAP direction agrees across all three models for 6/7 features;
+  `contribution_share` is the one exception (logistic regression says higher
+  contribution_share lowers risk, both tree models say the opposite — likely
+  a weak/noisy feature either way, given it ranks 4th-5th of 7 in importance
+  for all three). The final model's recall degrades noticeably across the
+  test window (0.708 in FY2020 to 0.412 in FY2022) even though ROC-AUC stays
+  high throughout, consistent with the actual distress rate itself dipping
+  during 2020-2021 (COVID relief funding plausibly masking distress
+  temporarily) before climbing back up in 2022. Oakwood's FY2021->FY2022 risk
+  jump is driven almost entirely by `leverage` (SHAP contribution -0.60 ->
+  +0.19) and `operating_margin` turning negative (-0.18 -> +0.46), not by
+  revenue or enrollment changes.
+
+## Phase 3
+
+See `notebooks/03_model_comparison.ipynb` and `reports/phase3_results.txt`
+for the full run; this is the log of problems hit and fixes.
+
+### Setup: `xgboost` was not installed and the project targets a very new Python
+
+The dev environment is Python 3.14.3 (pre-release-adjacent, very recent). `pip
+install xgboost` resolved and installed cleanly (`xgboost==3.4.1`, a pure
+`py3-none-win_amd64` wheel with no C-extension/ABI concerns), so no version
+pin or workaround was needed beyond adding `xgboost>=2.0` to
+`requirements.txt`.
+
+### Problem: median-imputing a CV fold whose training window is shorter than a feature's own lag
+
+`features.fit_median_imputer`/`fit_clip_bounds` are refit **per rolling-CV
+fold** on that fold's own training years only (so no fold's validation year
+leaks into its own preprocessing — the same reasoning as Phase 2's train/test
+split, just applied at the fold level too). The first CV fold trains on
+fiscal years 2014-2016 only. `enrollment_change_3yr` needs an enrollment
+value from 3 years earlier for the *same institution*, and the panel itself
+starts at fiscal year 2014 — so for every row in a 2014-2016-only training
+window, `enrollment_change_3yr` is NaN (no institution has data from
+2011-2013 in this panel). The column's **median over an all-NaN fold is
+itself NaN**, so `fillna(NaN)` left `NaN` in the feature and
+`LogisticRegression.fit()` raised `ValueError: Input X contains NaN`
+(scikit-learn's tree models tolerated it silently — see note below).
+
+**Fix:** `fit_median_imputer` now falls back to `0.0` for any feature whose
+training-fold median itself comes back NaN (a neutral "no known change" value
+when there simply isn't enough history yet) instead of propagating NaN.
+`fit_clip_bounds` needed no equivalent fix — pandas' `.clip(lower=nan,
+upper=nan)` is already a no-op per side, confirmed directly
+(`pd.Series([...]).clip(np.nan, np.nan)` returns the series unchanged).
+
+### Checked, not a bug: scikit-learn's tree ensembles accept NaN silently
+
+Before finding the fix above, `RandomForestClassifier.fit()` on the same
+NaN-containing fold did **not** raise — scikit-learn 1.9 added native missing-
+value support to its tree-based estimators (NaN rows get routed to whichever
+child minimizes impurity), so the bug was masked for random forest and would
+have stayed invisible until the logistic-regression fold hit the same data
+and raised explicitly. Fixed the root cause (the imputer) rather than relying
+on this behavior, since XGBoost's own native NaN handling and scikit-learn's
+are not guaranteed to agree, and Phase 3 explicitly wants identical
+preprocessing across all three models for a fair comparison.
+
+### Design decisions (not bugs, but worth recording)
+
+- **Rolling-origin CV folds**: expanding-window, 3 folds within the training
+  years (2014-2019) only — (train 2014-2016 → val 2017), (train 2014-2017 →
+  val 2018), (train 2014-2018 → val 2019). `min_train_years=3` was chosen so
+  every fold's training window is at least as long as the longest lag feature
+  (`enrollment_change_3yr`); a shorter minimum would have hit the NaN-median
+  problem above even after the fallback-to-0.0 fix, just with more of the
+  column silently zeroed out instead of genuinely imputed.
+- **Model selection metric**: hyperparameters are chosen by mean validation
+  **PR-AUC** across folds (threshold-independent, appropriate for a ~5-7%
+  positive class) rather than accuracy or ROC-AUC, which can look good on
+  this data even when precision at any usable recall is poor.
+- **Thresholding**: each model's cutoff is the threshold that maximizes F1 on
+  that model's **pooled out-of-fold validation predictions** (refit per fold
+  with the already-chosen best hyperparameters, predict on that fold's held-
+  out year, concatenate across folds) — never on the test set. Phase 2's
+  logistic baseline implicitly used scikit-learn's default 0.5 cutoff, which
+  had never actually been tuned; Phase 3 reruns that same model through the
+  same thresholding procedure as the two new models so all three are
+  compared on equal footing.
+- **XGBoost class imbalance**: `scale_pos_weight` (negatives/positives in the
+  training rows) is computed **fresh inside each fit call** — per CV fold
+  during tuning, then again on the full training set for the final model —
+  rather than tuned as a grid parameter, so it never leaks information from
+  outside that call's own training rows.
+- **Result**: logistic regression, not either tree ensemble, wins on test-set
+  PR-AUC (0.298 vs. 0.284 random forest / 0.272 XGBoost) and has by far the
+  best recall (0.519 vs. 0.393/0.383) on the distressed class. Plausible
+  reason: with only 7 engineered features and ~650 positive training rows,
+  there's limited room for the trees to learn genuine interactions beyond
+  what the already-informative ratio features (`log_total_revenue`,
+  `leverage`) capture linearly. Full comparison table and confusion matrices
+  in `reports/phase3_results.txt`.
+
+## Phase 2
+
+See `notebooks/02_features_and_baseline.ipynb` and `reports/phase2_results.txt`
+for the full run; this is the log of problems hit and fixes.
+
+### Fix: Phase 1's NOTES.md had the wrong Oakwood missing-years claim
+
+Phase 1's note below ("Oakwood spot-check") said Oakwood had no composite
+score for fiscal years 2018 and 2022. Re-checking the panel directly showed
+those two years *do* have a score (2.7 and 2.2) — the actual gap is **2019
+and 2023**. Confirmed by grepping the raw `composite_scores_2019.xls` /
+`composite_scores_2023.xls` files for Oakwood's OPEID (00103300): it is not
+present in either file at all (a text search for "Oakwood" only hits an
+unrelated institution, "Appalachian College of Pharmacy," in the town of
+Oakwood, VA). This is a genuine gap in the FSA source data for those two
+years, not a `fetch_composite_scores.py` parsing bug — no fix made.
+
+### Checked, not a bug: Form 990 `tax_prd_yr` fiscal-year alignment
+
+Worried that ProPublica's `tax_prd_yr` might label a filing by the year its
+fiscal period *starts* rather than *ends*, which would make every Form 990
+field in the panel off by one year relative to `fiscal_year`. Checked two
+ways:
+1. Oakwood's own raw filings: `tax_prd` is `YYYYMM` (e.g. `201406` = fiscal
+   year ending June 2014), and `tax_prd_yr` always equals `tax_prd`'s own
+   ending year (`tax_prd_yr=2014` for `tax_prd=201406`) for every one of its
+   filings — i.e. already an ending-year label, same convention as `fiscal_year`.
+2. Panel-wide: compared Form 990 `f990_total_assets_end` against IPEDS
+   `total_assets` for the same institution at shift=-1/0/+1 year. The current
+   (shift=0) match agrees within 5% for 79.3% of rows, vs. 45.5% (shift=-1)
+   and 46.0% (shift=+1) — shift=0 is clearly correct, not shift=-1 or +1.
+
+No fix needed; `build_panel.py`'s existing `tax_prd_yr == ipeds_year` match is correct.
+
+### Profile: IPEDS institutions that never match a composite score
+
+230 of 1,901 (12.1%) private-nonprofit-4yr institutions in the panel never
+get a composite score in any year. Two overlapping causes:
+- **Size/geography**: never-matched institutions are much smaller (median
+  enrollment 293 vs. 1,096 for matched institutions) and concentrated in CA,
+  FL, NY, and Puerto Rico — consistent with smaller schools being below some
+  FSA reporting threshold, exempt, or simply not posted in this window.
+- **OPEID is shared by multiple IPEDS UNITIDs (36 institutions)**: the FSA
+  composite score is reported once per OPEID, but IPEDS tracks each branch
+  campus of a multi-campus corporate entity (e.g. "Trine University-Regional/
+  Non-Traditional Campuses", the various "EDP University of Puerto Rico-*"
+  branches) under its own UNITID sharing the parent's OPEID. For these, a
+  sibling UNITID under the same OPEID *does* get the score — only one branch
+  can ever match by construction of the opeid+year join. Not a bug to fix
+  (the composite score genuinely applies at the OPEID/corporate-entity level),
+  just a real limitation worth knowing before interpreting per-branch-campus
+  missingness as a data problem.
+
+### New IPEDS F2 fields: tuition/fees revenue and gifts/contributions
+
+Verified variable names against the FY2013-14 (`F1314_F2_Dict.zip`) and
+FY2021-22 (`F2122_F2_Dict.zip`) data dictionaries from nces.ed.gov (`varlist`
++ `Description` sheets), not guessed:
+- `F2D01` — "Tuition and fees - Total", described as "net of any allowances
+  applied in the general purpose financial statements" → `tuition_fees_revenue`.
+- `F2D08` — "Private gifts, grants, and contracts - Total" → `contribution_revenue`.
+  Note this is IPEDS's standard published revenue-by-source category and is
+  slightly broader than pure gifts (also includes private grants/contracts);
+  a narrower `F2D08A` ("Private gifts - Total") also exists if a purer gifts-only
+  figure is ever needed.
+
+Both confirmed present in every year's raw F2 CSV, 2014-2023. Added to
+`config.py:F2_FIELDS` and the panel rebuilt (`fetch_ipeds.py`, `build_panel.py`
+required no changes — field selection is driven entirely by `F2_FIELDS`).
+
+### Feature construction and missing-data handling
+
+Seven features built in `scripts/features.py` for year *t* using only that
+year's own filings (IPEDS primary, Form 990 fallback for revenue/expenses/
+assets/liabilities — no 990 fallback exists for tuition/gifts since the 990
+doesn't break revenue into those categories). Missingness ranges from 1.7%
+(`operating_margin`) to 34.4% (`enrollment_change_3yr`, since it needs an
+enrollment value from 3 years earlier for the same institution). Rule: after
+combining sources, each feature is winsorized at the 1st/99th percentile (a
+handful of ratio features have multi-hundred-percent outliers from a near-zero
+denominator in a given year) and median-imputed — both the clip bounds and
+the median are fit on the **training split only** and then applied to test,
+so no information about the held-out years leaks into preprocessing.
+
+### Baseline model results (fiscal years 2014-2019 train, 2020-2022 test)
+
+Standardized logistic regression, `class_weight="balanced"`: ROC-AUC 0.848,
+PR-AUC 0.298, precision/recall on the distressed class 0.173/0.706 — far above
+the naive "always predict not distressed" baseline (0.000/0.000 precision/
+recall, 94.7% accuracy only because the test set is 94.7% not-distressed).
+Largest-magnitude standardized coefficients: `log_total_revenue` (-1.13,
+larger institutions less likely to be distressed), `leverage` (+0.99, more
+debt relative to assets more likely), `tuition_dependence` (-0.48). Full
+numbers in `reports/phase2_results.txt`.
+
 ## Scope decision
 
 Targeting fiscal years **2014–2023** (10 years) rather than full history

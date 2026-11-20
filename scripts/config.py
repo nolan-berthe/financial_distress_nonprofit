@@ -92,6 +92,10 @@ F2_FIELDS = {
     "F2B01": "total_revenues",
     "F2B02": "total_expenses",
     "F2B07": "net_assets_end_of_year",
+    # Added in Phase 2 -- verified against the FY2013-14 and FY2021-22 F2 data
+    # dictionaries (varlist + Description sheets), not guessed. See NOTES.md.
+    "F2D01": "tuition_fees_revenue",  # "Tuition and fees - Total", net of allowances
+    "F2D08": "contribution_revenue",  # "Private gifts, grants, and contracts - Total"
 }
 
 OAKWOOD_EIN = "630366652"

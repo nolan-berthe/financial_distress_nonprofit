@@ -1,0 +1,62 @@
+======================================================================
+PHASE 3 RESULTS SUMMARY
+======================================================================
+
+--- Train/test split (same as Phase 2) ---
+Train: fiscal years 2014-2019 (8981 rows, 7.3% distressed)
+Test:  fiscal years 2020-2022 (4046 rows, 5.3% distressed)
+Test-set distress rate (= PR-AUC of a random model): 0.053
+
+--- Rolling-origin CV folds (within training years only) ---
+  train [2014, 2015, 2016] -> validate [2017]
+  train [2014, 2015, 2016, 2017] -> validate [2018]
+  train [2014, 2015, 2016, 2017, 2018] -> validate [2019]
+Hyperparameters chosen by mean validation PR-AUC across folds; decision
+threshold chosen by best F1 on pooled out-of-fold validation predictions.
+Neither ever uses the test set.
+
+--- Chosen hyperparameters & thresholds ---
+Logistic regression: params={}, threshold=0.717
+Random forest:       params={'n_estimators': 300, 'max_depth': None, 'min_samples_leaf': 5}, threshold=0.558
+XGBoost:              params={'n_estimators': 100, 'max_depth': 5, 'learning_rate': 0.05}, threshold=0.695
+
+--- Test-set comparison ---
+                     threshold  roc_auc  pr_auc  precision  recall      f1
+Logistic regression     0.7170   0.8483  0.2977     0.2817  0.5187  0.3651
+Random forest           0.5584   0.8273  0.2842     0.3170  0.3925  0.3507
+XGBoost                 0.6949   0.8311  0.2724     0.2733  0.3832  0.3191
+
+Logistic regression: confusion matrix [[TN, FP], [FN, TP]] = [[3549, 283], [103, 111]]
+Random forest: confusion matrix [[TN, FP], [FN, TP]] = [[3651, 181], [130, 84]]
+XGBoost: confusion matrix [[TN, FP], [FN, TP]] = [[3614, 218], [132, 82]]
+
+Naive baseline (always predict not distressed): accuracy 0.947, precision/recall on distressed class 0.000/0.000
+
+--- Feature importance (random forest, XGBoost) ---
+              feature  importance_rf  importance_xgb
+    log_total_revenue         0.2854          0.4156
+             leverage         0.2649          0.2123
+     operating_margin         0.1464          0.0867
+   contribution_share         0.1015          0.0760
+   tuition_dependence         0.0816          0.0831
+enrollment_change_1yr         0.0805          0.0674
+enrollment_change_3yr         0.0398          0.0589
+
+--- Oakwood University predicted probability of distress ---
+ fiscal_year     split  composite_score  distressed_next_year  Logistic regression  Random forest  XGBoost
+        2014     train              3.0                   0.0                0.211          0.007    0.016
+        2015     train              3.0                   0.0                0.183          0.015    0.019
+        2016     train              2.8                   0.0                0.185          0.024    0.021
+        2017     train              3.0                   0.0                0.176          0.002    0.017
+        2018     train              2.7                   NaN                0.175          0.033    0.016
+        2019     train              NaN                   0.0                0.174          0.050    0.019
+        2020      test              2.5                   0.0                0.208          0.056    0.029
+        2021      test              3.0                   0.0                0.168          0.020    0.020
+        2022      test              2.2                   NaN                0.466          0.157    0.415
+        2023 unlabeled              NaN                   NaN                0.490          0.126    0.362
+
+--- Final model: Logistic regression ---
+Chosen for highest test-set PR-AUC (0.298) -- with a ~5% positive base rate, PR-AUC (not ROC-AUC) is the metric that actually distinguishes a useful
+model from a lucky one. Logistic regression also has the best F1 on the test set (0.365). See the notebook's Step 10 markdown cell for the
+full written justification (why the winner does or doesn't out-perform the other two, and what
+role each of the other two models still plays going into Phase 4).

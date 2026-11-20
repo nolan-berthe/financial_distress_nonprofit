@@ -1,0 +1,92 @@
+======================================================================
+PHASE 4 RESULTS SUMMARY
+======================================================================
+Final model: logistic regression, cutoff = 0.717
+
+--- Part 1: SHAP -- cross-model feature direction agreement ---
+              feature            logistic       random_forest             xgboost  all_agree
+    log_total_revenue higher -> less risk higher -> less risk higher -> less risk       True
+             leverage higher -> more risk higher -> more risk higher -> more risk       True
+   tuition_dependence higher -> less risk higher -> less risk higher -> less risk       True
+     operating_margin higher -> less risk higher -> less risk higher -> less risk       True
+   contribution_share higher -> less risk higher -> more risk higher -> more risk      False
+enrollment_change_1yr higher -> less risk higher -> less risk higher -> less risk       True
+enrollment_change_3yr higher -> less risk higher -> less risk higher -> less risk       True
+
+All three models agree on direction for 6/7 features.
+Disagreement on: ['contribution_share']
+
+Importance rank (0 = most important) by model:
+                       logistic_rank  rf_rank  xgb_rank
+feature                                                
+log_total_revenue                  0        0         0
+leverage                           1        1         1
+tuition_dependence                 2        5         3
+operating_margin                   3        2         2
+contribution_share                 4        3         4
+enrollment_change_1yr              5        4         5
+enrollment_change_3yr              6        6         6
+
+Note: random forest's SHAP values are in probability units; logistic regression's and
+XGBoost's are in log-odds units -- ranks/direction are comparable across models, raw magnitudes are not.
+
+--- Part 2: fairness, HBCU vs. other (test set, cutoff 0.717) ---
+          n  n_distressed   tp   fp    tn  fn    recall                                recall_95ci       fpr                                    fpr_95ci  precision                              precision_95ci
+group                                                                                                                                                                                                          
+HBCU    128             9    4   14   105   5  0.444444                               (0.125, 0.8)  0.117647  (0.06557377049180328, 0.18181818181818182)   0.222222   (0.05256578947368421, 0.4401111111111105)
+Other  3918           205  107  269  3444  98  0.521951  (0.45410566400473235, 0.5924462072636033)  0.072448  (0.06440312584209108, 0.08090665590857384)   0.284574  (0.23797126240164215, 0.33519607640468013)
+
+(95% CIs are from 2,000 within-group bootstrap resamples; the HBCU group's wide CIs reflect
+its small size (128 rows, 9 actually distressed) -- see NOTES.md for the full interpretation.)
+
+--- Part 3: Oakwood University (EIN 63-0366652), FY2020-2023 ---
+ fiscal_year  composite_score  distressed_next_year  predicted_prob  operating_margin  leverage  tuition_dependence  contribution_share  enrollment_change_1yr  enrollment_change_3yr  log_total_revenue
+        2020              2.5                   0.0          0.2081            0.0089    0.1835              0.3769              0.1306                -0.0996                -0.1970            17.8822
+        2021              3.0                   0.0          0.1682            0.1346    0.1881              0.2957              0.1177                 0.0568                -0.1125            17.9371
+        2022              2.2                   NaN          0.4665           -0.1638    0.3391              0.3236              0.1090                 0.0124                -0.0367            17.8129
+        2023              NaN                   NaN          0.4897           -0.1300    0.3524              0.2876              0.1385                -0.1027                -0.0400            17.8923
+
+SHAP contribution change, FY2021 -> FY2022 (sorted by |change|):
+              feature  value_2021  value_2022  shap_2021  shap_2022  shap_delta
+             leverage      0.1881      0.3391    -0.6022     0.1928      0.7950
+     operating_margin      0.1346     -0.1638    -0.1755     0.4567      0.6322
+    log_total_revenue     17.9371     17.8129    -0.4698    -0.3870      0.0828
+   tuition_dependence      0.2957      0.3236     0.4621     0.4059     -0.0561
+enrollment_change_1yr      0.0568      0.0124    -0.0458    -0.0114      0.0344
+enrollment_change_3yr     -0.1125     -0.0367     0.0406     0.0118     -0.0288
+   contribution_share      0.1177      0.1090     0.0212     0.0257      0.0045
+
+Largest driver of the FY2021->FY2022 jump: 'leverage' (value 0.1881 -> 0.3391, SHAP contribution -0.6022 -> 0.1928).
+
+--- Part 4: COVID-19 check ---
+
+Distress rate by fiscal year (all labeled rows, 2014-2022):
+             distress_rate  n_labeled_rows
+fiscal_year                               
+2014                0.0728            1484
+2015                0.0872            1525
+2016                0.0718            1519
+2017                0.0687            1514
+2018                0.0657            1462
+2019                0.0738            1477
+2020                0.0439            1481
+2021                0.0564            1436
+2022                0.0602            1129
+
+Final model performance by test fiscal year (cutoff 0.717):
+                n  base_rate  roc_auc  pr_auc  recall
+fiscal_year                                          
+2020         1481     0.0439   0.8868  0.4116  0.7077
+2021         1436     0.0564   0.8527  0.3127  0.4568
+2022         1129     0.0602   0.8344  0.2415  0.4118
+
+Diagnostic-only: logistic regression coefficients, train (2014-2019) vs. a refit on the
+2020-2022 (COVID-period) rows themselves -- never used for evaluation, comparison only:
+              feature  coef_train_2014_2019  coef_covid_2020_2022  abs_change  sign_flip
+   tuition_dependence               -0.4801               -0.8361      0.3560      False
+   contribution_share               -0.0847               -0.3593      0.2746      False
+     operating_margin               -0.3692               -0.6105      0.2413      False
+    log_total_revenue               -1.1303               -0.8983      0.2320      False
+enrollment_change_3yr               -0.0615               -0.2647      0.2032      False
+enrollment_change_1yr               -0.0784                0.0715      0.1498       True
+             leverage                0.9913                1.1144      0.1231      False
